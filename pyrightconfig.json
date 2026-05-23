@@ -1,0 +1,9 @@
+{
+  "include": [
+    "backend"
+  ],
+  "extraPaths": [
+    "C:\\Users\\aweso\\miniconda3\\Lib\\site-packages",
+    "backend"
+  ]
+}

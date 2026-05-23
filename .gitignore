@@ -1,0 +1,63 @@
+# ==========================================
+# QueryLab Mock Engine - Root Git Ignore
+# ==========================================
+
+# --- Python / Backend ---
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.ipynb_checkpoints
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+backend/.venv/
+backend/venv/
+backend/env/
+
+# Python packaging/builds
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Databases / Data ---
+*.sqlite
+*.db
+/backend/test_db.sqlite
+
+# --- Node / Angular / Frontend ---
+**/node_modules/
+/frontend/dist/
+/frontend/tmp/
+/frontend/out-tsc/
+/frontend/.angular/
+/frontend/coverage/
+npm-debug.log
+yarn-error.log
+
+# --- IDEs / Editors ---
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.history/
+
+# --- OS / System ---
+.DS_Store
+Thumbs.db

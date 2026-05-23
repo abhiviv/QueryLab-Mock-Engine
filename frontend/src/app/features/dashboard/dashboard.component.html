@@ -1,0 +1,324 @@
+<div class="app-container">
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="logo-area">
+      <span class="logo-icon">⚡</span>
+      <div class="logo-text">
+        <h1>QueryLab Mock Engine</h1>
+        <span class="subtext">Local API Sandbox & Schema Reflection Daemon</span>
+      </div>
+    </div>
+    
+    <div class="status-indicator">
+      <div class="status-pulse" [ngClass]="{'active': activeSandbox}"></div>
+      <span class="status-label">
+        Daemon status: 
+        <strong [ngStyle]="{'color': activeSandbox ? '#10b981' : '#f59e0b'}">
+          {{ activeSandbox ? 'Active (' + activeSandbox.environment_name + ')' : 'Idle' }}
+        </strong>
+      </span>
+    </div>
+  </header>
+
+  <div class="dashboard-grid">
+    <!-- COLUMN 1: Database Setup & Inspector -->
+    <section class="grid-card connection-card">
+      <div class="card-header">
+        <span class="card-icon">🗄️</span>
+        <h2>Database Reflection</h2>
+      </div>
+      
+      <div class="card-body">
+        <div class="form-group">
+          <label for="connection-string">SQLAlchemy Connection URI</label>
+          <div class="input-action-group">
+            <input 
+              id="connection-string"
+              type="text" 
+              [(ngModel)]="dbConnectionString" 
+              placeholder="e.g. sqlite:///test.db or mysql+pymysql://..."
+              class="form-input text-mono"
+            />
+            <button 
+              (click)="inspectDb()" 
+              [disabled]="isInspectLoading" 
+              class="btn btn-secondary"
+            >
+              <span *ngIf="isInspectLoading" class="loader-spinner"></span>
+              {{ isInspectLoading ? 'Inspecting...' : 'Connect & Inspect' }}
+            </button>
+          </div>
+          <small class="help-text">Supports SQLite, MySQL, and other local dialect strings.</small>
+        </div>
+
+        <!-- Connection errors -->
+        <div *ngIf="inspectError" class="alert-box alert-error">
+          <strong>Connection failed:</strong>
+          <p>{{ inspectError }}</p>
+        </div>
+
+        <!-- Schema inspector results -->
+        <div *ngIf="tableNames.length > 0" class="schema-explorer">
+          <h3>Reflected Tables</h3>
+          <div class="explorer-layout">
+            <!-- Left Side: Table Names -->
+            <div class="table-list">
+              <button 
+                *ngFor="let table of tableNames"
+                (click)="selectActiveTable(table)"
+                [class.active]="selectedTable === table"
+                class="table-select-btn"
+              >
+                <span class="table-icon">📋</span>
+                {{ table }}
+              </button>
+            </div>
+
+            <!-- Right Side: Selected Table Schema Columns -->
+            <div class="column-details" *ngIf="selectedTable">
+              <h4>
+                Columns in <code>{{ selectedTable }}</code>
+              </h4>
+              <div class="columns-table-wrapper">
+                <table class="columns-table">
+                  <thead>
+                    <tr>
+                      <th>Column</th>
+                      <th>Type</th>
+                      <th>Attributes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let col of inspectedTables[selectedTable]">
+                      <td class="col-name text-mono">{{ col.name }}</td>
+                      <td class="col-type text-mono"><span class="type-badge">{{ col.type }}</span></td>
+                      <td>
+                        <span *ngIf="col.primary_key" class="attr-badge pk-badge">PK</span>
+                        <span *ngIf="!col.nullable" class="attr-badge req-badge">NOT NULL</span>
+                        <span *ngIf="col.nullable && !col.primary_key" class="attr-badge null-badge">NULL</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div *ngIf="tableNames.length === 0 && !inspectError && !isInspectLoading" class="empty-state-panel">
+          <p>No database reflected yet. Enter a valid connection string to discover schemas.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLUMN 2: Simulation Rules & Deploy Config -->
+    <section class="grid-card configuration-card">
+      <div class="card-header">
+        <span class="card-icon">⚙️</span>
+        <h2>Simulation Settings</h2>
+      </div>
+
+      <div class="card-body">
+        <div class="form-group env-group">
+          <label for="env-name">Sandbox Environment ID</label>
+          <input 
+            id="env-name"
+            type="text" 
+            [(ngModel)]="environmentName" 
+            placeholder="e.g. staging_mock_api" 
+            class="form-input inline-env-input"
+          />
+        </div>
+
+        <div class="routes-configurator">
+          <div class="section-title-row">
+            <h3>Mock Route Mappings</h3>
+            <button (click)="addRouteRow()" class="btn btn-text">
+              <span class="plus-icon">+</span> Add Rule Row
+            </button>
+          </div>
+
+          <div class="routes-table-container">
+            <table class="routes-config-table">
+              <thead>
+                <tr>
+                  <th style="width: 25%;">Endpoint Path</th>
+                  <th style="width: 15%;">HTTP Method</th>
+                  <th style="width: 25%;">Target DB Schema Table</th>
+                  <th style="width: 12%;">Records</th>
+                  <th style="width: 18%;">Latency (ms)</th>
+                  <th style="width: 5%;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let route of routes; let idx = index">
+                  <!-- Endpoint Path -->
+                  <td>
+                    <div class="path-input-prefix">
+                      <span class="prefix">/mock/</span>
+                      <input 
+                        type="text" 
+                        [(ngModel)]="route.endpoint_path" 
+                        class="form-input table-cell-input text-mono"
+                        placeholder="users"
+                      />
+                    </div>
+                  </td>
+                  
+                  <!-- HTTP Method -->
+                  <td>
+                    <select [(ngModel)]="route.http_method" class="form-input table-cell-input method-select">
+                      <option value="GET">GET</option>
+                      <option value="POST">POST</option>
+                      <option value="PUT">PUT</option>
+                      <option value="DELETE">DELETE</option>
+                    </select>
+                  </td>
+
+                  <!-- Target Table selection -->
+                  <td>
+                    <select [(ngModel)]="route.target_table" class="form-input table-cell-input">
+                      <option [value]="undefined">-- None (Static Generic Mock) --</option>
+                      <option *ngFor="let table of tableNames" [value]="table">{{ table }}</option>
+                    </select>
+                  </td>
+
+                  <!-- Record count -->
+                  <td>
+                    <input 
+                      type="number" 
+                      [(ngModel)]="route.records_count" 
+                      min="1" 
+                      max="100" 
+                      class="form-input table-cell-input number-input"
+                    />
+                  </td>
+
+                  <!-- Simulated Latency (ms) -->
+                  <td>
+                    <div class="latency-cell">
+                      <input 
+                        type="range" 
+                        [(ngModel)]="route.latency_ms" 
+                        min="0" 
+                        max="2000" 
+                        step="50" 
+                        class="latency-slider"
+                      />
+                      <span class="latency-val text-mono">{{ route.latency_ms }}ms</span>
+                    </div>
+                  </td>
+
+                  <!-- Action: Remove Row -->
+                  <td>
+                    <button (click)="removeRouteRow(idx)" class="btn-icon-delete" title="Delete Rule">
+                      🗑️
+                    </button>
+                  </td>
+                </tr>
+
+                <tr *ngIf="routes.length === 0">
+                  <td colspan="6" class="no-routes-placeholder">
+                    No mock routes configured. Click "Add Rule Row" or Inspect a Database to automatically pre-populate rules.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Execution deploy messaging -->
+        <div *ngIf="deploySuccess" class="alert-box alert-success">
+          <strong>Deployed:</strong> {{ deploySuccess }}
+        </div>
+        <div *ngIf="deployError" class="alert-box alert-error">
+          <strong>Deployment Error:</strong> {{ deployError }}
+        </div>
+
+        <!-- Deploy Sandbox Button -->
+        <div class="deploy-action-container">
+          <button 
+            (click)="deploySandbox()" 
+            [disabled]="isDeployLoading" 
+            class="btn btn-primary btn-large btn-deploy"
+          >
+            <span *ngIf="isDeployLoading" class="loader-spinner"></span>
+            {{ isDeployLoading ? 'Deploying Daemon...' : '⚡ Deploy Mock Sandbox Simulation' }}
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- BOTTOM PORTION: Intercept Trace Logger -->
+  <section class="grid-card audit-logs-card">
+    <div class="card-header logs-header">
+      <div class="header-left">
+        <span class="card-icon">⚡</span>
+        <h2>Live Daemon Mock Intercept Logger</h2>
+        <span class="badge badge-pulse">Real-Time Trace</span>
+      </div>
+      <div class="header-actions">
+        <button (click)="refreshLogs()" class="btn btn-secondary btn-sm">Refresh</button>
+        <button (click)="clearLogs()" class="btn btn-secondary btn-sm btn-danger-outline">Clear Logs</button>
+      </div>
+    </div>
+
+    <div class="card-body logs-body">
+      <div class="logs-table-wrapper">
+        <table class="logs-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>HTTP Method</th>
+              <th>Intercepted Request Path</th>
+              <th>Source Table Schema</th>
+              <th>Response Size</th>
+              <th>Latency (Target)</th>
+              <th>Status Code</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let log of logs" class="log-row">
+              <td class="text-mono">{{ log.timestamp | date:'HH:mm:ss.SSS' }}</td>
+              <td>
+                <span class="method-badge" [ngClass]="log.method.toLowerCase()">
+                  {{ log.method }}
+                </span>
+              </td>
+              <td class="text-mono bold-path">{{ log.path }}</td>
+              <td class="text-mono">{{ log.target_table }}</td>
+              <td class="text-mono">{{ log.response_size_bytes }} B</td>
+              <td>
+                <span 
+                  class="latency-badge"
+                  [ngClass]="{
+                    'latency-fast': log.latency_ms < 100,
+                    'latency-med': log.latency_ms >= 100 && log.latency_ms < 500,
+                    'latency-slow': log.latency_ms >= 500
+                  }"
+                >
+                  {{ log.latency_ms }} ms
+                </span>
+              </td>
+              <td>
+                <span 
+                  class="status-badge"
+                  [ngStyle]="{'background-color': log.status_code === 200 ? '#10b98122' : '#ef444422', 'color': log.status_code === 200 ? '#10b981' : '#f87171'}"
+                >
+                  {{ log.status_code }}
+                </span>
+              </td>
+            </tr>
+
+            <tr *ngIf="logs.length === 0">
+              <td colspan="7" class="no-logs-placeholder">
+                Waiting for mock intercept requests... Call <code class="text-mono">http://localhost:8000/mock/&lt;your-endpoint&gt;</code> to trigger logs.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
