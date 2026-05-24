@@ -69,6 +69,55 @@ def generate_mock_records(columns: List[Dict[str, Any]], count: int) -> List[Dic
             col_type = col["type"].upper()
             is_pk = col.get("primary_key", False)
             
+            # Check for explicitly mapped mock overrides
+            override = col.get("mock_override")
+            if override and override != "default":
+                if override == "first_name":
+                    record[col["name"]] = random.choice(first_names)
+                elif override == "last_name":
+                    record[col["name"]] = random.choice(last_names)
+                elif override == "full_name":
+                    record[col["name"]] = f"{random.choice(first_names)} {random.choice(last_names)}"
+                elif override == "email":
+                    record[col["name"]] = f"{random.choice(first_names).lower()}.{random.choice(last_names).lower()}{i}@example.com"
+                elif override == "username":
+                    record[col["name"]] = f"{random.choice(first_names).lower()}_{i}"
+                elif override == "phone":
+                    record[col["name"]] = f"+1-555-019-{i:04d}"
+                elif override == "address":
+                    record[col["name"]] = f"{100 + i} Developer Lane, Tech City"
+                elif override == "uuid":
+                    record[col["name"]] = f"3d9a7c{i:02d}-4f2a-8b9c-1234-56789abcdef0"
+                elif override == "product":
+                    record[col["name"]] = random.choice(products)
+                elif override == "category":
+                    record[col["name"]] = random.choice(categories)
+                elif override == "status":
+                    record[col["name"]] = random.choice(statuses)
+                elif override == "token":
+                    record[col["name"]] = f"TOK-{random.choice(['A','B','C','D'])}{random.randint(1000, 9999)}-{i:02d}"
+                elif override == "currency":
+                    record[col["name"]] = f"{random.choice(['$', '€', '£'])}{random.randint(10, 500)}.{random.randint(10, 99)}"
+                elif override == "age":
+                    record[col["name"]] = random.randint(18, 75)
+                elif override == "quantity":
+                    record[col["name"]] = random.randint(1, 10)
+                elif override == "year":
+                    record[col["name"]] = random.randint(2020, 2026)
+                elif override == "price":
+                    record[col["name"]] = round(random.uniform(9.99, 499.99), 2)
+                elif override == "rating":
+                    record[col["name"]] = round(random.uniform(3.5, 5.0), 1)
+                elif override == "boolean":
+                    record[col["name"]] = random.choice([True, False])
+                elif override == "date":
+                    record[col["name"]] = (datetime.now() - timedelta(days=i)).date().isoformat()
+                elif override == "datetime":
+                    record[col["name"]] = (datetime.now() - timedelta(days=i, hours=random.randint(0, 23))).isoformat()
+                else:
+                    record[col["name"]] = f"Val_{i}"
+                continue
+
             # 1. Primary Key sequential generation
             if is_pk and ("INT" in col_type or "SERIAL" in col_type or "NUM" in col_type):
                 record[col["name"]] = i

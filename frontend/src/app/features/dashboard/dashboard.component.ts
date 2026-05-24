@@ -36,6 +36,39 @@ export class DashboardComponent implements OnInit, OnDestroy {
   inspectError: string | null = null;
   deploySuccess: string | null = null;
   deployError: string | null = null;
+
+  // Mock Override options
+  mockOverrides = [
+    { value: 'default', label: '-- Auto-Detect (Default) --' },
+    { value: 'first_name', label: 'First Name' },
+    { value: 'last_name', label: 'Last Name' },
+    { value: 'full_name', label: 'Full Name' },
+    { value: 'email', label: 'Email Address' },
+    { value: 'username', label: 'Username' },
+    { value: 'phone', label: 'Phone Number' },
+    { value: 'address', label: 'Street Address' },
+    { value: 'uuid', label: 'UUID / GUID' },
+    { value: 'product', label: 'Product Name' },
+    { value: 'category', label: 'Category' },
+    { value: 'status', label: 'Status' },
+    { value: 'token', label: 'Structured Token' },
+    { value: 'currency', label: 'International Currency' },
+    { value: 'age', label: 'Age (Integer)' },
+    { value: 'quantity', label: 'Quantity / Count' },
+    { value: 'year', label: 'Year (Integer)' },
+    { value: 'price', label: 'Price / Cost' },
+    { value: 'rating', label: 'Rating / Score' },
+    { value: 'boolean', label: 'Boolean' },
+    { value: 'date', label: 'Date (YYYY-MM-DD)' },
+    { value: 'datetime', label: 'DateTime (ISO)' }
+  ];
+
+  // Preview states
+  selectedPreviewRoute: MockRouteConfig | null = null;
+  previewPayload: any = null;
+  formattedPreviewPayload = '';
+  isPreviewLoading = false;
+  copySuccess = false;
   
   // Polling logs subscription
   private logPollSub?: Subscription;
@@ -76,6 +109,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.dbConnectionString = res.active_sandbox.db_connection_string || '';
           this.routes = res.active_sandbox.routes || [];
           this.cachedTables = res.cached_tables || [];
+          
+          if (res.active_sandbox.table_schemas && Object.keys(res.active_sandbox.table_schemas).length > 0) {
+            this.inspectedTables = res.active_sandbox.table_schemas;
+            this.tableNames = Object.keys(res.active_sandbox.table_schemas);
+            if (this.tableNames.length > 0 && !this.selectedTable) {
+              this.selectedTable = this.tableNames[0];
+            }
+          }
+          
+          // Auto select first route for preview if exists
+          if (this.routes.length > 0 && !this.selectedPreviewRoute) {
+            this.selectRouteForPreview(this.routes[0]);
+          }
         }
       },
       error: (err) => {
@@ -155,7 +201,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const payload: SandboxEnvironment = {
       environment_name: this.environmentName,
       db_connection_string: this.dbConnectionString || undefined,
-      routes: this.routes
+      routes: this.routes,
+      table_schemas: this.inspectedTables
     };
 
     this.mockService.registerSandbox(payload).subscribe({
@@ -170,6 +217,59 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.isDeployLoading = false;
         this.deployError = err.error?.detail || err.message || 'Failed to deploy simulation.';
       }
+    });
+  }
+
+  selectRouteForPreview(route: MockRouteConfig) {
+    this.selectedPreviewRoute = route;
+    this.fetchPreview();
+  }
+
+  fetchPreview() {
+    if (!this.selectedPreviewRoute) return;
+    this.isPreviewLoading = true;
+    this.mockService.previewRoute(this.selectedPreviewRoute, this.inspectedTables).subscribe({
+      next: (data) => {
+        this.isPreviewLoading = false;
+        this.previewPayload = data;
+        this.formattedPreviewPayload = this.syntaxHighlight(data);
+      },
+      error: (err) => {
+        this.isPreviewLoading = false;
+        this.previewPayload = null;
+        this.formattedPreviewPayload = `<span class="json-error">Failed to generate preview: ${err.error?.detail || err.message}</span>`;
+      }
+    });
+  }
+
+  copyPreviewToClipboard() {
+    if (!this.previewPayload) return;
+    const jsonStr = JSON.stringify(this.previewPayload, null, 2);
+    navigator.clipboard.writeText(jsonStr).then(() => {
+      this.copySuccess = true;
+      setTimeout(() => this.copySuccess = false, 2000);
+    });
+  }
+
+  syntaxHighlight(json: any): string {
+    if (typeof json !== 'string') {
+      json = JSON.stringify(json, undefined, 2);
+    }
+    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, (match: string) => {
+      let cls = 'json-number';
+      if (/^"/.test(match)) {
+        if (/:$/.test(match)) {
+          cls = 'json-key';
+        } else {
+          cls = 'json-string';
+        }
+      } else if (/true|false/.test(match)) {
+        cls = 'json-boolean';
+      } else if (/null/.test(match)) {
+        cls = 'json-null';
+      }
+      return `<span class="${cls}">${match}</span>`;
     });
   }
 

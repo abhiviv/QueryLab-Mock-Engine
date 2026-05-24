@@ -14,6 +14,7 @@ export interface SandboxEnvironment {
   environment_name: string;
   db_connection_string?: string;
   routes: MockRouteConfig[];
+  table_schemas?: Record<string, any[]>;
 }
 
 export interface LogEntry {
@@ -56,5 +57,12 @@ export class MockEngineService {
 
   clearLogs(): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/logs/clear`, {});
+  }
+
+  previewRoute(route: MockRouteConfig, tableSchemas: Record<string, any[]>): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/preview`, {
+      route,
+      table_schemas: tableSchemas
+    });
   }
 }

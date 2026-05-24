@@ -86,6 +86,7 @@
                       <th>Column</th>
                       <th>Type</th>
                       <th>Attributes</th>
+                      <th>Mock Override</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -93,9 +94,20 @@
                       <td class="col-name text-mono">{{ col.name }}</td>
                       <td class="col-type text-mono"><span class="type-badge">{{ col.type }}</span></td>
                       <td>
-                        <span *ngIf="col.primary_key" class="attr-badge pk-badge">PK</span>
-                        <span *ngIf="!col.nullable" class="attr-badge req-badge">NOT NULL</span>
-                        <span *ngIf="col.nullable && !col.primary_key" class="attr-badge null-badge">NULL</span>
+                        <div class="attributes-wrapper">
+                          <span *ngIf="col.primary_key" class="attr-badge pk-badge">PK</span>
+                          <span *ngIf="!col.nullable" class="attr-badge req-badge">NOT NULL</span>
+                          <span *ngIf="col.nullable && !col.primary_key" class="attr-badge null-badge">NULL</span>
+                        </div>
+                      </td>
+                      <td>
+                        <select 
+                          [(ngModel)]="col.mock_override" 
+                          (change)="selectedPreviewRoute && selectedPreviewRoute.target_table === selectedTable && fetchPreview()" 
+                          class="override-select"
+                        >
+                          <option *ngFor="let opt of mockOverrides" [value]="opt.value">{{ opt.label }}</option>
+                        </select>
                       </td>
                     </tr>
                   </tbody>
@@ -142,12 +154,12 @@
             <table class="routes-config-table">
               <thead>
                 <tr>
-                  <th style="width: 25%;">Endpoint Path</th>
-                  <th style="width: 15%;">HTTP Method</th>
-                  <th style="width: 25%;">Target DB Schema Table</th>
-                  <th style="width: 12%;">Records</th>
-                  <th style="width: 18%;">Latency (ms)</th>
-                  <th style="width: 5%;"></th>
+                  <th style="width: 28%;">Endpoint Path</th>
+                  <th style="width: 14%;">HTTP Method</th>
+                  <th style="width: 25%;">Target DB Table</th>
+                  <th style="width: 10%;">Records</th>
+                  <th style="width: 15%;">Latency</th>
+                  <th style="width: 8%;">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -159,6 +171,7 @@
                       <input 
                         type="text" 
                         [(ngModel)]="route.endpoint_path" 
+                        (ngModelChange)="selectedPreviewRoute === route && fetchPreview()"
                         class="form-input table-cell-input text-mono"
                         placeholder="users"
                       />
@@ -167,7 +180,11 @@
                   
                   <!-- HTTP Method -->
                   <td>
-                    <select [(ngModel)]="route.http_method" class="form-input table-cell-input method-select">
+                    <select 
+                      [(ngModel)]="route.http_method" 
+                      (ngModelChange)="selectedPreviewRoute === route && fetchPreview()"
+                      class="form-input table-cell-input method-select"
+                    >
                       <option value="GET">GET</option>
                       <option value="POST">POST</option>
                       <option value="PUT">PUT</option>
@@ -177,7 +194,11 @@
 
                   <!-- Target Table selection -->
                   <td>
-                    <select [(ngModel)]="route.target_table" class="form-input table-cell-input">
+                    <select 
+                      [(ngModel)]="route.target_table" 
+                      (ngModelChange)="selectedPreviewRoute === route && fetchPreview()"
+                      class="form-input table-cell-input"
+                    >
                       <option [value]="undefined">-- None (Static Generic Mock) --</option>
                       <option *ngFor="let table of tableNames" [value]="table">{{ table }}</option>
                     </select>
@@ -188,6 +209,7 @@
                     <input 
                       type="number" 
                       [(ngModel)]="route.records_count" 
+                      (ngModelChange)="selectedPreviewRoute === route && fetchPreview()"
                       min="1" 
                       max="100" 
                       class="form-input table-cell-input number-input"
@@ -200,6 +222,7 @@
                       <input 
                         type="range" 
                         [(ngModel)]="route.latency_ms" 
+                        (ngModelChange)="selectedPreviewRoute === route && fetchPreview()"
                         min="0" 
                         max="2000" 
                         step="50" 
@@ -209,11 +232,25 @@
                     </div>
                   </td>
 
-                  <!-- Action: Remove Row -->
+                  <!-- Action: Preview & Delete -->
                   <td>
-                    <button (click)="removeRouteRow(idx)" class="btn-icon-delete" title="Delete Rule">
-                      🗑️
-                    </button>
+                    <div class="actions-cell">
+                      <button 
+                        (click)="selectRouteForPreview(route)" 
+                        class="btn-icon-action btn-icon-preview" 
+                        [class.active-preview]="selectedPreviewRoute === route"
+                        title="Preview JSON Payload"
+                      >
+                        👁️
+                      </button>
+                      <button 
+                        (click)="removeRouteRow(idx)" 
+                        class="btn-icon-action btn-icon-delete" 
+                        title="Delete Rule"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </td>
                 </tr>
 
@@ -246,6 +283,45 @@
             {{ isDeployLoading ? 'Deploying Daemon...' : '⚡ Deploy Mock Sandbox Simulation' }}
           </button>
         </div>
+      </div>
+    </section>
+
+    <!-- COLUMN 3: Live JSON Payload Preview -->
+    <section class="grid-card preview-card">
+      <div class="card-header preview-header">
+        <span class="card-icon">👁️</span>
+        <h2>JSON Payload Preview</h2>
+      </div>
+      <div class="card-body preview-body">
+        <div *ngIf="selectedPreviewRoute; else noPreviewState" class="preview-content">
+          <div class="preview-details">
+            <span class="preview-method" [ngClass]="selectedPreviewRoute.http_method.toLowerCase()">
+              {{ selectedPreviewRoute.http_method }}
+            </span>
+            <span class="preview-path text-mono">/mock/{{ selectedPreviewRoute.endpoint_path }}</span>
+          </div>
+
+          <div class="preview-actions">
+            <button (click)="fetchPreview()" [disabled]="isPreviewLoading" class="btn btn-secondary btn-sm">
+              <span *ngIf="isPreviewLoading" class="loader-spinner"></span>
+              🔄 Refresh
+            </button>
+            <button (click)="copyPreviewToClipboard()" class="btn btn-secondary btn-sm" [class.btn-success]="copySuccess">
+              {{ copySuccess ? '✓ Copied!' : '📋 Copy JSON' }}
+            </button>
+          </div>
+          
+          <div class="terminal-container">
+            <pre class="terminal-body text-mono" [innerHTML]="formattedPreviewPayload"></pre>
+          </div>
+        </div>
+        
+        <ng-template #noPreviewState>
+          <div class="empty-state-panel">
+            <p>No route selected for preview.</p>
+            <small>Click the 👁️ icon next to any rule row to inspect its live simulated JSON payload.</small>
+          </div>
+        </ng-template>
       </div>
     </section>
   </div>

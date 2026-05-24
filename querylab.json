@@ -1,0 +1,100 @@
+{
+  "environment_name": "Test_Suite_Sandbox",
+  "db_connection_string": "sqlite:///backend/test_db.sqlite",
+  "routes": [
+    {
+      "endpoint_path": "products",
+      "http_method": "GET",
+      "target_table": "products",
+      "records_count": 3,
+      "latency_ms": 50
+    },
+    {
+      "endpoint_path": "currency-test",
+      "http_method": "GET",
+      "target_table": "users",
+      "records_count": 2,
+      "latency_ms": 0
+    }
+  ],
+  "table_schemas": {
+    "products": [
+      {
+        "name": "product_id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true,
+        "mock_override": "uuid"
+      },
+      {
+        "name": "product_name",
+        "type": "VARCHAR(100)",
+        "nullable": false,
+        "primary_key": false,
+        "mock_override": "username"
+      },
+      {
+        "name": "sku_code",
+        "type": "VARCHAR(30)",
+        "nullable": false,
+        "primary_key": false
+      },
+      {
+        "name": "unit_price",
+        "type": "FLOAT",
+        "nullable": false,
+        "primary_key": false
+      },
+      {
+        "name": "quantity_in_stock",
+        "type": "INTEGER",
+        "nullable": true,
+        "primary_key": false
+      },
+      {
+        "name": "updated_at",
+        "type": "DATETIME",
+        "nullable": true,
+        "primary_key": false
+      }
+    ],
+    "users": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "primary_key": true
+      },
+      {
+        "name": "username",
+        "type": "VARCHAR(50)",
+        "nullable": false,
+        "primary_key": false
+      },
+      {
+        "name": "full_name",
+        "type": "VARCHAR(100)",
+        "nullable": true,
+        "primary_key": false
+      },
+      {
+        "name": "email",
+        "type": "VARCHAR(120)",
+        "nullable": false,
+        "primary_key": false
+      },
+      {
+        "name": "is_active",
+        "type": "BOOLEAN",
+        "nullable": true,
+        "primary_key": false
+      },
+      {
+        "name": "created_at",
+        "type": "DATETIME",
+        "nullable": true,
+        "primary_key": false
+      }
+    ]
+  }
+}

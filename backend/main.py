@@ -1,10 +1,12 @@
 import asyncio
 import time
+import os
+import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.schemas import SandboxEnvironment, MockRouteConfig, DatabaseInspectRequest
 from backend.database_inspector import extract_schema_metadata, generate_mock_records
@@ -24,12 +26,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_PATH = os.path.join(BASE_DIR, "querylab.json")
+
+def save_config(env: SandboxEnvironment):
+    try:
+        data = env.model_dump() if hasattr(env, "model_dump") else env.dict()
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"Error persisting configuration: {e}")
+
+def load_config() -> Optional[SandboxEnvironment]:
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r") as f:
+                data = json.load(f)
+                return SandboxEnvironment(**data)
+        except Exception as e:
+            print(f"Error loading configuration from disk: {e}")
+    return None
+
 # In-memory runtime stores
 class RuntimeStore:
     def __init__(self):
         self.active_sandbox: Optional[SandboxEnvironment] = None
         self.schema_cache: Dict[str, List[Dict[str, Any]]] = {}  # table_name -> column_meta
         self.logs: List[Dict[str, Any]] = []
+        
+        # Load persisted config on boot
+        loaded = load_config()
+        if loaded:
+            self.active_sandbox = loaded
+            if loaded.table_schemas:
+                self.schema_cache = loaded.table_schemas
+            elif loaded.db_connection_string:
+                inspect_res = extract_schema_metadata(loaded.db_connection_string)
+                if inspect_res["success"]:
+                    self.schema_cache = inspect_res["tables"]
 
 store = RuntimeStore()
 
@@ -72,11 +106,15 @@ async def register_sandbox(env: SandboxEnvironment):
     store.active_sandbox = env
     store.schema_cache.clear()
     
-    # If connection string is provided, pre-inspect and cache table schemas for instant responses
-    if env.db_connection_string:
+    # Cache schema and custom overrides if provided by frontend, else inspect DB
+    if env.table_schemas:
+        store.schema_cache = env.table_schemas
+    elif env.db_connection_string:
         inspect_res = extract_schema_metadata(env.db_connection_string)
         if inspect_res["success"]:
             store.schema_cache = inspect_res["tables"]
+            
+    save_config(env)
             
     return {
         "status": "success",
@@ -108,6 +146,38 @@ async def clear_logs():
     """
     store.logs.clear()
     return {"status": "success"}
+
+class PreviewRequest(BaseModel):
+    route: MockRouteConfig
+    table_schemas: Optional[Dict[str, List[Dict[str, Any]]]] = Field(default_factory=dict)
+
+@app.post("/api/sandbox/preview")
+async def preview_route(req: PreviewRequest):
+    """
+    Generates a single dry-run mock response payload for dashboard live-previews.
+    """
+    table = req.route.target_table
+    columns = req.table_schemas.get(table) if (req.table_schemas and table) else None
+    
+    is_single_item = (req.route.http_method in ["POST", "PUT", "DELETE"])
+    
+    if columns:
+        records = generate_mock_records(columns, req.route.records_count)
+        response_data = records[0] if (is_single_item and records) else records
+    else:
+        fallback_cols = [
+            {"name": "id", "type": "INTEGER", "primary_key": True},
+            {"name": "name", "type": "VARCHAR"},
+            {"name": "status", "type": "VARCHAR"},
+            {"name": "updated_at", "type": "DATETIME"}
+        ]
+        records = generate_mock_records(fallback_cols, req.route.records_count)
+        response_data = records[0] if is_single_item else records
+        
+    if req.route.http_method == "DELETE":
+        response_data = {"status": "success", "message": f"Resource from table '{table or 'generic'}' deleted successfully."}
+        
+    return response_data
 
 # Wildcard route interceptor matching all methods
 @app.api_route("/mock/{proxy_path:path}", methods=["GET", "POST", "PUT", "DELETE"])

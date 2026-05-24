@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 class MockRouteConfig(BaseModel):
     endpoint_path: str = Field(..., description="The wildcard path to intercept, e.g., 'users'")
@@ -12,6 +12,7 @@ class SandboxEnvironment(BaseModel):
     environment_name: str = Field(..., description="Unique label for the mock sandbox environment")
     db_connection_string: Optional[str] = Field(None, description="SQLAlchemy compatible connection string (SQLite, MySQL, etc.)")
     routes: List[MockRouteConfig] = Field(default_factory=list, description="List of endpoint routing configs")
+    table_schemas: Optional[Dict[str, List[Dict[str, Any]]]] = Field(default_factory=dict, description="Cached table schemas with custom overrides")
 
 class DatabaseInspectRequest(BaseModel):
     db_connection_string: str = Field(..., description="SQLAlchemy connection URL to inspect, e.g., sqlite:///dev.db")
